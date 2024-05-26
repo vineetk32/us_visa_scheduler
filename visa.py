@@ -16,10 +16,8 @@ from selenium.webdriver.support.ui import WebDriverWait as Wait
 from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
-
 from embassy import *
+from telegram_client import TelegramClient
 
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -34,23 +32,14 @@ SCHEDULE_ID = config['PERSONAL_INFO']['SCHEDULE_ID']
 # Target Period:
 PERIOD_START = config['PERSONAL_INFO']['PERIOD_START']
 PERIOD_END = config['PERSONAL_INFO']['PERIOD_END']
+TELEGRAM_BOT_TOKEN = config['NOTIFICATION']['TELEGRAM_BOT_TOKEN']
+TELEGRAM_CHAT_ID = config['NOTIFICATION']['TELEGRAM_CHAT_ID']
+
 # Embassy Section:
 YOUR_EMBASSY = config['PERSONAL_INFO']['YOUR_EMBASSY'] 
 EMBASSY = Embassies[YOUR_EMBASSY][0]
 FACILITY_ID = Embassies[YOUR_EMBASSY][1]
 REGEX_CONTINUE = Embassies[YOUR_EMBASSY][2]
-
-# Notification:
-# Get email notifications via https://sendgrid.com/ (Optional)
-SENDGRID_API_KEY = config['NOTIFICATION']['SENDGRID_API_KEY']
-# Get push notifications via https://pushover.net/ (Optional)
-PUSHOVER_TOKEN = config['NOTIFICATION']['PUSHOVER_TOKEN']
-PUSHOVER_USER = config['NOTIFICATION']['PUSHOVER_USER']
-# Get push notifications via PERSONAL WEBSITE http://yoursite.com (Optional)
-PERSONAL_SITE_USER = config['NOTIFICATION']['PERSONAL_SITE_USER']
-PERSONAL_SITE_PASS = config['NOTIFICATION']['PERSONAL_SITE_PASS']
-PUSH_TARGET_EMAIL = config['NOTIFICATION']['PUSH_TARGET_EMAIL']
-PERSONAL_PUSHER_URL = config['NOTIFICATION']['PERSONAL_PUSHER_URL']
 
 # Time Section:
 minute = 60
@@ -80,37 +69,14 @@ JS_SCRIPT = ("var req = new XMLHttpRequest();"
              "req.send(null);"
              "return req.responseText;")
 
+TELEGRAM_BOT = TelegramClient(TELEGRAM_BOT_TOKEN)
+
 def send_notification(title, msg):
     print(f"Sending notification!")
-    if SENDGRID_API_KEY:
-        message = Mail(from_email=USERNAME, to_emails=USERNAME, subject=msg, html_content=msg)
-        try:
-            sg = SendGridAPIClient(SENDGRID_API_KEY)
-            response = sg.send(message)
-            print(response.status_code)
-            print(response.body)
-            print(response.headers)
-        except Exception as e:
-            print(e.message)
-    if PUSHOVER_TOKEN:
-        url = "https://api.pushover.net/1/messages.json"
-        data = {
-            "token": PUSHOVER_TOKEN,
-            "user": PUSHOVER_USER,
-            "message": msg
-        }
-        requests.post(url, data)
-    if PERSONAL_SITE_USER:
-        url = PERSONAL_PUSHER_URL
-        data = {
-            "title": "VISA - " + str(title),
-            "user": PERSONAL_SITE_USER,
-            "pass": PERSONAL_SITE_PASS,
-            "email": PUSH_TARGET_EMAIL,
-            "msg": msg,
-        }
-        requests.post(url, data)
-
+    TELEGRAM_BOT.send_message(chat_id=TELEGRAM_CHAT_ID, message=f"""
+    *{title}*
+    {msg}
+    """)
 
 def auto_action(label, find_by, el_type, action, value, sleep_time=0):
     print("\t"+ label +":", end="")
@@ -219,6 +185,7 @@ def get_available_date(dates):
         if is_in_period(date, PSD, PED):
             return date
     print(f"\n\nNo available dates between ({PSD.date()}) and ({PED.date()})!")
+    send_notification('No dates available within given timeframe!',f"Earliest - {dates[0]['date']}, latest - {dates[-1]['date']}")
 
 
 def info_logger(file_path, log):
@@ -248,7 +215,7 @@ if __name__ == "__main__":
             dates = get_date()
             if not dates:
                 # Ban Situation
-                msg = f"List is empty, Probabely banned!\n\tSleep for {BAN_COOLDOWN_TIME} hours!\n"
+                msg = f"List is empty, Probably banned!\n\tSleep for {BAN_COOLDOWN_TIME} hours!\n"
                 print(msg)
                 info_logger(LOG_FILE_NAME, msg)
                 send_notification("BAN", msg)

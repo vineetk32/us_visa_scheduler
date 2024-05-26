@@ -4,6 +4,7 @@ import json
 import random
 import requests
 import configparser
+import asyncio
 from datetime import datetime
 
 from selenium import webdriver
@@ -71,12 +72,15 @@ JS_SCRIPT = ("var req = new XMLHttpRequest();"
 
 TELEGRAM_BOT = TelegramClient(TELEGRAM_BOT_TOKEN)
 
+#print(f"Date URL - {DATE_URL}")
+#print(f"Time URL - {TIME_URL}")
+
 def send_notification(title, msg):
     print(f"Sending notification!")
-    TELEGRAM_BOT.send_message(chat_id=TELEGRAM_CHAT_ID, message=f"""
-    *{title}*
-    {msg}
-    """)
+    try:
+        asyncio.run(TELEGRAM_BOT.send_message(chat_id=TELEGRAM_CHAT_ID, message=f"*{title}*\n{msg}"))
+    except Exception as e:
+        print(f"Caught exception : {e}")
 
 def auto_action(label, find_by, el_type, action, value, sleep_time=0):
     print("\t"+ label +":", end="")
@@ -170,7 +174,7 @@ def is_logged_in():
     return True
 
 
-def get_available_date(dates):
+def get_available_date(dates, notify=False):
     # Evaluation of different available dates
     def is_in_period(date, PSD, PED):
         new_date = datetime.strptime(date, "%Y-%m-%d")
@@ -185,7 +189,8 @@ def get_available_date(dates):
         if is_in_period(date, PSD, PED):
             return date
     print(f"\n\nNo available dates between ({PSD.date()}) and ({PED.date()})!")
-    send_notification('No dates available within given timeframe!',f"Earliest - {dates[0]['date']}, latest - {dates[-1]['date']}")
+    if notify:
+        send_notification('No dates available within given timeframe!',f"Earliest - {dates[0]['date']}, latest - {dates[-1]['date']}")
 
 
 def info_logger(file_path, log):
@@ -230,10 +235,11 @@ if __name__ == "__main__":
                 msg = "Available dates:\n"+ msg
                 print(msg)
                 info_logger(LOG_FILE_NAME, msg)
-                date = get_available_date(dates)
+                date = get_available_date(dates, True if Req_count == 0 else False)
                 if date:
                     # A good date to schedule for
                     END_MSG_TITLE, msg = reschedule(date)
+                    send_notification(END_MSG_TITLE, msg)
                     break
                 RETRY_WAIT_TIME = random.randint(RETRY_TIME_L_BOUND, RETRY_TIME_U_BOUND)
                 t1 = time.time()
@@ -252,15 +258,15 @@ if __name__ == "__main__":
                     print(msg)
                     info_logger(LOG_FILE_NAME, msg)
                     time.sleep(RETRY_WAIT_TIME)
-        except:
+        except Exception as e:
             # Exception Occured
-            msg = f"Break the loop after exception!\n"
+            msg = f"Break the loop after exception: {e}\n"
             END_MSG_TITLE = "EXCEPTION"
+            send_notification(END_MSG_TITLE, msg)
             break
 
 print(msg)
 info_logger(LOG_FILE_NAME, msg)
-send_notification(END_MSG_TITLE, msg)
 driver.get(SIGN_OUT_LINK)
 driver.stop_client()
 driver.quit()

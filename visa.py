@@ -1,3 +1,4 @@
+#!.venv/bin/python
 import time
 import json
 import random
@@ -6,7 +7,10 @@ import configparser
 from datetime import datetime
 
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.service import Service as ChromeService
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.core.utils import ChromeType
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait as Wait
 from selenium.webdriver.common.by import By
@@ -28,8 +32,8 @@ PASSWORD = config['PERSONAL_INFO']['PASSWORD']
 # https://ais.usvisa-info.com/en-am/niv/schedule/{SCHEDULE_ID}/appointment
 SCHEDULE_ID = config['PERSONAL_INFO']['SCHEDULE_ID']
 # Target Period:
-PRIOD_START = config['PERSONAL_INFO']['PRIOD_START']
-PRIOD_END = config['PERSONAL_INFO']['PRIOD_END']
+PERIOD_START = config['PERSONAL_INFO']['PERIOD_START']
+PERIOD_END = config['PERSONAL_INFO']['PERIOD_END']
 # Embassy Section:
 YOUR_EMBASSY = config['PERSONAL_INFO']['YOUR_EMBASSY'] 
 EMBASSY = Embassies[YOUR_EMBASSY][0]
@@ -61,12 +65,6 @@ WORK_LIMIT_TIME = config['TIME'].getfloat('WORK_LIMIT_TIME')
 WORK_COOLDOWN_TIME = config['TIME'].getfloat('WORK_COOLDOWN_TIME')
 # Temporary Banned (empty list): wait COOLDOWN_TIME hours
 BAN_COOLDOWN_TIME = config['TIME'].getfloat('BAN_COOLDOWN_TIME')
-
-# CHROMEDRIVER
-# Details for the script to control Chrome
-LOCAL_USE = config['CHROMEDRIVER'].getboolean('LOCAL_USE')
-# Optional: HUB_ADDRESS is mandatory only when LOCAL_USE = False
-HUB_ADDRESS = config['CHROMEDRIVER']['HUB_ADDRESS']
 
 SIGN_IN_LINK = f"https://ais.usvisa-info.com/{EMBASSY}/niv/users/sign_in"
 APPOINTMENT_URL = f"https://ais.usvisa-info.com/{EMBASSY}/niv/schedule/{SCHEDULE_ID}/appointment"
@@ -214,8 +212,8 @@ def get_available_date(dates):
         # print(f'{new_date.date()} : {result}', end=", ")
         return result
     
-    PED = datetime.strptime(PRIOD_END, "%Y-%m-%d")
-    PSD = datetime.strptime(PRIOD_START, "%Y-%m-%d")
+    PED = datetime.strptime(PERIOD_END, "%Y-%m-%d")
+    PSD = datetime.strptime(PERIOD_START, "%Y-%m-%d")
     for d in dates:
         date = d.get('date')
         if is_in_period(date, PSD, PED):
@@ -228,17 +226,14 @@ def info_logger(file_path, log):
     with open(file_path, "a") as file:
         file.write(str(datetime.now().time()) + ":\n" + log + "\n")
 
-
-if LOCAL_USE:
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()))
-else:
-    driver = webdriver.Remote(command_executor=HUB_ADDRESS, options=webdriver.ChromeOptions())
-
+options = Options()
+options.binary_location = "/usr/bin/chromium-browser"
+driver = webdriver.Chrome(service=ChromeService(executable_path="/usr/lib/chromium-browser/chromedriver"), options=options)
 
 if __name__ == "__main__":
     first_loop = True
     while 1:
-        LOG_FILE_NAME = "log_" + str(datetime.now().date()) + ".txt"
+        LOG_FILE_NAME = "logs/log_" + str(datetime.now().date()) + ".txt"
         if first_loop:
             t0 = time.time()
             total_time = 0

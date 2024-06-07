@@ -5,6 +5,7 @@ import random
 import requests
 import configparser
 import asyncio
+import traceback
 from datetime import datetime
 
 from selenium import webdriver
@@ -16,6 +17,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait as Wait
 from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
+from selenium.common.exceptions import TimeoutException
 
 from embassy import *
 from telegram_client import TelegramClient
@@ -154,7 +156,16 @@ def get_date():
     session = driver.get_cookie("_yatri_session")["value"]
     script = JS_SCRIPT % (str(DATE_URL), session)
     content = driver.execute_script(script)
-    return json.loads(content)
+    dates = []
+    if (content.count('html') > 0):
+        print("Found non-json response, skipping.")
+        return dates
+    try:
+        dates = json.loads(content)
+    except Exception as e:
+        msg = f"Failed to decode {content}: {e}, {traceback.format_exc()}"
+        info_logger(LOG_FILE_NAME, msg)
+    return dates
 
 def get_time(date):
     time_url = TIME_URL % date
@@ -174,7 +185,7 @@ def is_logged_in():
     return True
 
 
-def get_available_date(dates, notify=False):
+def get_available_date(dates):
     # Evaluation of different available dates
     def is_in_period(date, PSD, PED):
         new_date = datetime.strptime(date, "%Y-%m-%d")
@@ -188,10 +199,16 @@ def get_available_date(dates, notify=False):
         date = d.get('date')
         if is_in_period(date, PSD, PED):
             return date
-    print(f"\n\nNo available dates between ({PSD.date()}) and ({PED.date()})!")
-    if notify:
-        send_notification('No dates available within given timeframe!',f"Earliest - {dates[0]['date']}, latest - {dates[-1]['date']}")
+    print(f"\n\nNo available dates between ({PSD.date()}) and ({PED.date()})!")        
 
+def get_earliest_date(dates, earliest_date: str) -> str:
+    earliest_date_value = datetime.strptime(earliest_date, "%Y-%m-%d")
+    for date in dates:
+        date_value = datetime.strptime(date.get('date'), "%Y-%m-%d")
+        if (earliest_date_value > date_value):
+            earliest_date = date.get('date')
+            earliest_date_value = date_value
+    return earliest_date
 
 def info_logger(file_path, log):
     # file_path: e.g. "log.txt"
@@ -206,21 +223,28 @@ if __name__ == "__main__":
     first_loop = True
     while 1:
         LOG_FILE_NAME = "logs/log_" + str(datetime.now().date()) + ".txt"
-        if first_loop:
-            t0 = time.time()
-            total_time = 0
-            Req_count = 0
-            start_process()
-            first_loop = False
-        Req_count += 1
         try:
+            if first_loop:
+                t0 = time.time()
+                total_time = 0
+                Req_count = 0
+                try:
+                    start_process()
+                except TimeoutException as e:
+                    send_notification(f"EXCEPTION", "Caught: {e}, retrying after {STEP_TIME * 60} mins.")
+                    time.sleep(STEP_TIME * 60 * 60)
+                    start_process()
+                first_loop = False
+                earliest_date = '2038-11-26'
+            Req_count += 1
             msg = "-" * 60 + f"\nRequest count: {Req_count}, Log time: {datetime.today()}\n"
             print(msg)
             info_logger(LOG_FILE_NAME, msg)
             dates = get_date()
+            earliest_date = get_earliest_date(dates, earliest_date)
             if not dates:
                 # Ban Situation
-                msg = f"List is empty, Probably banned!\n\tSleep for {BAN_COOLDOWN_TIME} hours!\n"
+                msg = f"List is empty, Probably banned!\n\tSleep for {BAN_COOLDOWN_TIME} hours!\nEarliest date found - {earliest_date}, tries - {Req_count}"
                 print(msg)
                 info_logger(LOG_FILE_NAME, msg)
                 send_notification("BAN", msg)
@@ -235,7 +259,7 @@ if __name__ == "__main__":
                 msg = "Available dates:\n"+ msg
                 print(msg)
                 info_logger(LOG_FILE_NAME, msg)
-                date = get_available_date(dates, True if Req_count == 0 else False)
+                date = get_available_date(dates)
                 if date:
                     # A good date to schedule for
                     END_MSG_TITLE, msg = reschedule(date)
@@ -249,7 +273,7 @@ if __name__ == "__main__":
                 info_logger(LOG_FILE_NAME, msg)
                 if total_time > WORK_LIMIT_TIME * hour:
                     # Let program rest a little
-                    send_notification("REST", f"Break-time after {WORK_LIMIT_TIME} hours | Repeated {Req_count} times")
+                    send_notification("REST", f"Break-time after {WORK_LIMIT_TIME} hours\nEarliest date found - {earliest_date}, tries - {Req_count}")
                     driver.get(SIGN_OUT_LINK)
                     time.sleep(WORK_COOLDOWN_TIME * hour)
                     first_loop = True
@@ -260,9 +284,11 @@ if __name__ == "__main__":
                     time.sleep(RETRY_WAIT_TIME)
         except Exception as e:
             # Exception Occured
-            msg = f"Break the loop after exception: {e}\n"
+            msg = f"Break the loop after exception: {e}\n{traceback.format_exc()}"
             END_MSG_TITLE = "EXCEPTION"
             send_notification(END_MSG_TITLE, msg)
+            info_logger(LOG_FILE_NAME, msg)
+            info_logger(LOG_FILE_NAME,traceback.format_exc())
             break
 
 print(msg)

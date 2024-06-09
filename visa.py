@@ -110,6 +110,18 @@ def auto_action(label, find_by, el_type, action, value, sleep_time=0):
     if sleep_time:
         time.sleep(sleep_time)
 
+def login():
+    count = 1
+    MAX_RETRIES = 3
+    while count < MAX_RETRIES:
+        try:
+            start_process()
+            return
+        except Exception as e:
+            info_logger(LOG_FILE_NAME, f"Failed to login! {e}, {traceback.format_exc()}. Retries - {count}/{MAX_RETRIES}.")
+            count += 1
+            time.sleep(random.randint(RETRY_TIME_L_BOUND, RETRY_TIME_U_BOUND))
+    raise RuntimeError(f"Failed to login after {count} / {MAX_RETRIES} attempts. Exiting")
 
 def start_process():
     # Bypass reCAPTCHA
@@ -163,8 +175,7 @@ def get_date():
     try:
         dates = json.loads(content)
     except Exception as e:
-        msg = f"Failed to decode {content}: {e}, {traceback.format_exc()}"
-        info_logger(LOG_FILE_NAME, msg)
+        info_logger(LOG_FILE_NAME, f"Failed to decode {content}: {e}, {traceback.format_exc()}")
     return dates
 
 def get_time(date):
@@ -212,6 +223,7 @@ def get_earliest_date(dates, earliest_date: str) -> str:
 
 def info_logger(file_path, log):
     # file_path: e.g. "log.txt"
+    print(log)
     with open(file_path, "a") as file:
         file.write(str(datetime.now().time()) + ":\n" + log + "\n")
 
@@ -221,6 +233,7 @@ driver = webdriver.Chrome(service=ChromeService(executable_path="/usr/lib/chromi
 
 if __name__ == "__main__":
     first_loop = True
+    MAX_BAN_COUNT = 3
     while 1:
         LOG_FILE_NAME = "logs/log_" + str(datetime.now().date()) + ".txt"
         try:
@@ -228,36 +241,37 @@ if __name__ == "__main__":
                 t0 = time.time()
                 total_time = 0
                 Req_count = 0
-                try:
-                    start_process()
-                except TimeoutException as e:
-                    send_notification(f"EXCEPTION", "Caught: {e}, retrying after {STEP_TIME * 60} mins.")
-                    time.sleep(STEP_TIME * 60 * 60)
-                    start_process()
+                possible_ban_count = 1
+                login()
                 first_loop = False
                 earliest_date = '2038-11-26'
+            else:
+                # Sleep from the previous attempt
+                RETRY_WAIT_TIME = random.randint(RETRY_TIME_L_BOUND, RETRY_TIME_U_BOUND)
+                msg = "Retry Wait Time: "+ str(RETRY_WAIT_TIME)+ " seconds"
+                info_logger(LOG_FILE_NAME, msg)
+                time.sleep(RETRY_WAIT_TIME)
+
             Req_count += 1
-            msg = "-" * 60 + f"\nRequest count: {Req_count}, Log time: {datetime.today()}\n"
-            print(msg)
-            info_logger(LOG_FILE_NAME, msg)
+            info_logger(LOG_FILE_NAME, "-" * 60 + f"\nRequest count: {Req_count}, Log time: {datetime.today()}\n")
             dates = get_date()
             earliest_date = get_earliest_date(dates, earliest_date)
             if not dates:
                 # Ban Situation
-                msg = f"List is empty, Probably banned!\n\tSleep for {BAN_COOLDOWN_TIME} hours!\nEarliest date found - {earliest_date}, tries - {Req_count}"
-                print(msg)
-                info_logger(LOG_FILE_NAME, msg)
-                send_notification("BAN", msg)
-                driver.get(SIGN_OUT_LINK)
-                time.sleep(BAN_COOLDOWN_TIME * hour)
-                first_loop = True
+                possible_ban_count += 1
+                info_logger(LOG_FILE_NAME, "No dates found!")
+                if (possible_ban_count >= MAX_BAN_COUNT):
+                    msg = f"List is empty after {possible_ban_count} / {MAX_BAN_COUNT} tries, maybe banned!\n\tSleep for {BAN_COOLDOWN_TIME} hours!\nEarliest date found - {earliest_date}, tries - {Req_count}"
+                    info_logger(LOG_FILE_NAME, msg)
+                    send_notification("INFO", msg)
+                    driver.get(SIGN_OUT_LINK)
+                    time.sleep(BAN_COOLDOWN_TIME * hour)
+                    first_loop = True
             else:
                 # Print Available dates:
-                msg = ""
+                msg = "Available dates:\n "
                 for d in dates:
                     msg = msg + "%s" % (d.get('date')) + ", "
-                msg = "Available dates:\n"+ msg
-                print(msg)
                 info_logger(LOG_FILE_NAME, msg)
                 date = get_available_date(dates)
                 if date:
@@ -265,23 +279,15 @@ if __name__ == "__main__":
                     END_MSG_TITLE, msg = reschedule(date)
                     send_notification(END_MSG_TITLE, msg)
                     break
-                RETRY_WAIT_TIME = random.randint(RETRY_TIME_L_BOUND, RETRY_TIME_U_BOUND)
                 t1 = time.time()
                 total_time = t1 - t0
-                msg = "\nWorking Time:  ~ {:.2f} minutes".format(total_time/minute)
-                print(msg)
-                info_logger(LOG_FILE_NAME, msg)
+                info_logger(LOG_FILE_NAME, "\nWorking Time:  ~ {:.2f} minutes".format(total_time/minute))
                 if total_time > WORK_LIMIT_TIME * hour:
                     # Let program rest a little
                     send_notification("REST", f"Break-time after {WORK_LIMIT_TIME} hours\nEarliest date found - {earliest_date}, tries - {Req_count}")
                     driver.get(SIGN_OUT_LINK)
                     time.sleep(WORK_COOLDOWN_TIME * hour)
                     first_loop = True
-                else:
-                    msg = "Retry Wait Time: "+ str(RETRY_WAIT_TIME)+ " seconds"
-                    print(msg)
-                    info_logger(LOG_FILE_NAME, msg)
-                    time.sleep(RETRY_WAIT_TIME)
         except Exception as e:
             # Exception Occured
             msg = f"Break the loop after exception: {e}\n{traceback.format_exc()}"

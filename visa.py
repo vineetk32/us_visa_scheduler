@@ -45,8 +45,8 @@ FACILITY_ID = Embassies[YOUR_EMBASSY][1]
 REGEX_CONTINUE = Embassies[YOUR_EMBASSY][2]
 
 # Time Section:
-minute = 60
-hour = 60 * minute
+SECS_PER_MINUTE = 60
+SECS_PER_HOUR = 60 * SECS_PER_MINUTE
 # Time between steps (interactions with forms)
 STEP_TIME = 0.5
 # Time between retries/checks for available dates (seconds)
@@ -228,6 +228,7 @@ def info_logger(file_path, log):
         file.write(str(datetime.now().time()) + ":\n" + log + "\n")
 
 options = Options()
+options.add_argument("--headless=new")
 options.binary_location = "/usr/bin/chromium-browser"
 driver = webdriver.Chrome(service=ChromeService(executable_path="/usr/lib/chromium-browser/chromedriver"), options=options)
 
@@ -240,7 +241,7 @@ if __name__ == "__main__":
             if first_loop:
                 t0 = time.time()
                 total_time = 0
-                Req_count = 0
+                tries = 0
                 possible_ban_count = 1
                 login()
                 first_loop = False
@@ -252,8 +253,8 @@ if __name__ == "__main__":
                 info_logger(LOG_FILE_NAME, msg)
                 time.sleep(RETRY_WAIT_TIME)
 
-            Req_count += 1
-            info_logger(LOG_FILE_NAME, "-" * 60 + f"\nRequest count: {Req_count}, Log time: {datetime.today()}\n")
+            tries += 1
+            info_logger(LOG_FILE_NAME, "-" * 60 + f"\nRequest count: {tries}, Log time: {datetime.today()}\n")
             dates = get_date()
             earliest_date = get_earliest_date(dates, earliest_date)
             if not dates:
@@ -261,12 +262,10 @@ if __name__ == "__main__":
                 possible_ban_count += 1
                 info_logger(LOG_FILE_NAME, "No dates found!")
                 if (possible_ban_count >= MAX_BAN_COUNT):
-                    msg = f"List is empty after {possible_ban_count} / {MAX_BAN_COUNT} tries, maybe banned!\n\tSleep for {BAN_COOLDOWN_TIME} hours!\nEarliest date found - {earliest_date}, tries - {Req_count}"
+                    msg = f"List is empty after {possible_ban_count} / {MAX_BAN_COUNT} tries, exiting.\n\tEarliest date found - {earliest_date}, tries - {tries}"
                     info_logger(LOG_FILE_NAME, msg)
                     send_notification("INFO", msg)
-                    driver.get(SIGN_OUT_LINK)
-                    time.sleep(BAN_COOLDOWN_TIME * hour)
-                    first_loop = True
+                    break
             else:
                 # Print Available dates:
                 msg = "Available dates:\n "
@@ -281,23 +280,17 @@ if __name__ == "__main__":
                     break
                 t1 = time.time()
                 total_time = t1 - t0
-                info_logger(LOG_FILE_NAME, "\nWorking Time:  ~ {:.2f} minutes".format(total_time/minute))
-                if total_time > WORK_LIMIT_TIME * hour:
-                    # Let program rest a little
-                    send_notification("REST", f"Break-time after {WORK_LIMIT_TIME} hours\nEarliest date found - {earliest_date}, tries - {Req_count}")
-                    driver.get(SIGN_OUT_LINK)
-                    time.sleep(WORK_COOLDOWN_TIME * hour)
-                    first_loop = True
+                info_logger(LOG_FILE_NAME, "\nWorking Time:  ~ {:.2f} minutes".format(total_time/SECS_PER_MINUTE))
+                if total_time > WORK_LIMIT_TIME * SECS_PER_HOUR:
+                    send_notification("STATUS", f"After {total_time/SECS_PER_MINUTE:.2f} minutes - \nEarliest date found - {earliest_date}, tries - {tries}")
+                    break
         except Exception as e:
             # Exception Occured
-            msg = f"Break the loop after exception: {e}\n{traceback.format_exc()}"
-            END_MSG_TITLE = "EXCEPTION"
-            send_notification(END_MSG_TITLE, msg)
+            msg = f"Exiting after exception: {e}"
+            send_notification("EXCEPTION", msg)
             info_logger(LOG_FILE_NAME, msg)
             info_logger(LOG_FILE_NAME,traceback.format_exc())
             break
-
-print(msg)
 info_logger(LOG_FILE_NAME, msg)
 driver.get(SIGN_OUT_LINK)
 driver.stop_client()

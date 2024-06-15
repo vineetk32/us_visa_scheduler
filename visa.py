@@ -6,7 +6,7 @@ import requests
 import configparser
 import asyncio
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
@@ -33,8 +33,6 @@ PASSWORD = config['PERSONAL_INFO']['PASSWORD']
 # https://ais.usvisa-info.com/en-am/niv/schedule/{SCHEDULE_ID}/appointment
 SCHEDULE_ID = config['PERSONAL_INFO']['SCHEDULE_ID']
 # Target Period:
-PERIOD_START = config['PERSONAL_INFO']['PERIOD_START']
-PERIOD_END = config['PERSONAL_INFO']['PERIOD_END']
 TELEGRAM_BOT_TOKEN = config['NOTIFICATION']['TELEGRAM_BOT_TOKEN']
 TELEGRAM_CHAT_ID = config['NOTIFICATION']['TELEGRAM_CHAT_ID']
 
@@ -47,6 +45,8 @@ REGEX_CONTINUE = Embassies[YOUR_EMBASSY][2]
 # Time Section:
 SECS_PER_MINUTE = 60
 SECS_PER_HOUR = 60 * SECS_PER_MINUTE
+DATE_FORMAT = "%Y-%m-%d"
+
 # Time between steps (interactions with forms)
 STEP_TIME = 0.5
 # Time between retries/checks for available dates (seconds)
@@ -76,6 +76,14 @@ TELEGRAM_BOT = TelegramClient(TELEGRAM_BOT_TOKEN)
 
 #print(f"Date URL - {DATE_URL}")
 #print(f"Time URL - {TIME_URL}")
+
+def parse_config_date(config_date: str) -> str:
+    calculated_period = config_date
+    if config_date.count("$DATE$") > 0:
+        days_to_add = config_date.split('+')[1].strip()
+        calculated_period = (datetime.today() + timedelta(int(days_to_add))).strftime(DATE_FORMAT)
+    #print(f'Period - {calculated_period}')
+    return calculated_period
 
 def send_notification(title, msg):
     print(f"Sending notification!")
@@ -113,6 +121,7 @@ def auto_action(label, find_by, el_type, action, value, sleep_time=0):
 def login():
     count = 1
     MAX_RETRIES = 3
+    last_exception_message = ''
     while count < MAX_RETRIES:
         try:
             start_process()
@@ -121,12 +130,16 @@ def login():
             info_logger(LOG_FILE_NAME, f"Failed to login! {e}, {traceback.format_exc()}. Retries - {count}/{MAX_RETRIES}.")
             count += 1
             time.sleep(random.randint(RETRY_TIME_L_BOUND, RETRY_TIME_U_BOUND))
-    raise RuntimeError(f"Failed to login after {count} / {MAX_RETRIES} attempts. Exiting")
+            last_exception_message = str(e)
+    raise RuntimeError(f"Failed to login after {count} / {MAX_RETRIES} attempts: {last_exception_message}. Exiting.")
 
 def start_process():
     # Bypass reCAPTCHA
     driver.get(SIGN_IN_LINK)
     time.sleep(STEP_TIME)
+    title = driver.title
+    if title.count("construction") > 0:
+        raise RuntimeError(f"Site not available: {title}")
     Wait(driver, 60).until(EC.presence_of_element_located((By.NAME, "commit")))
     auto_action("Click bounce", "xpath", '//a[@class="down-arrow bounce"]', "click", "", STEP_TIME)
     auto_action("Email", "id", "user_email", "send", USERNAME, STEP_TIME)
@@ -199,13 +212,13 @@ def is_logged_in():
 def get_available_date(dates):
     # Evaluation of different available dates
     def is_in_period(date, PSD, PED):
-        new_date = datetime.strptime(date, "%Y-%m-%d")
+        new_date = datetime.strptime(date, DATE_FORMAT)
         result = ( PED > new_date and new_date > PSD )
         # print(f'{new_date.date()} : {result}', end=", ")
         return result
     
-    PED = datetime.strptime(PERIOD_END, "%Y-%m-%d")
-    PSD = datetime.strptime(PERIOD_START, "%Y-%m-%d")
+    PED = datetime.strptime(PERIOD_END, DATE_FORMAT)
+    PSD = datetime.strptime(PERIOD_START, DATE_FORMAT)
     for d in dates:
         date = d.get('date')
         if is_in_period(date, PSD, PED):
@@ -213,9 +226,9 @@ def get_available_date(dates):
     print(f"\n\nNo available dates between ({PSD.date()}) and ({PED.date()})!")        
 
 def get_earliest_date(dates, earliest_date: str) -> str:
-    earliest_date_value = datetime.strptime(earliest_date, "%Y-%m-%d")
+    earliest_date_value = datetime.strptime(earliest_date, DATE_FORMAT)
     for date in dates:
-        date_value = datetime.strptime(date.get('date'), "%Y-%m-%d")
+        date_value = datetime.strptime(date.get('date'), DATE_FORMAT)
         if (earliest_date_value > date_value):
             earliest_date = date.get('date')
             earliest_date_value = date_value
@@ -232,6 +245,9 @@ options.add_argument("--headless=new")
 options.binary_location = "/usr/bin/chromium-browser"
 driver = webdriver.Chrome(service=ChromeService(executable_path="/usr/lib/chromium-browser/chromedriver"), options=options)
 
+PERIOD_START = parse_config_date(config['PERSONAL_INFO']['PERIOD_START'])
+PERIOD_END = parse_config_date(config['PERSONAL_INFO']['PERIOD_END'])
+
 if __name__ == "__main__":
     first_loop = True
     MAX_BAN_COUNT = 3
@@ -241,7 +257,7 @@ if __name__ == "__main__":
             if first_loop:
                 t0 = time.time()
                 total_time = 0
-                tries = 0
+                tries = 1
                 possible_ban_count = 1
                 login()
                 first_loop = False
@@ -269,6 +285,7 @@ if __name__ == "__main__":
             else:
                 # Print Available dates:
                 msg = "Available dates:\n "
+                possible_ban_count = 1
                 for d in dates:
                     msg = msg + "%s" % (d.get('date')) + ", "
                 info_logger(LOG_FILE_NAME, msg)

@@ -123,17 +123,19 @@ def reschedule(driver: webdriver.Chrome, date, schedule_id: str, embassy_config:
         "Cookie": "_yatri_session=" + driver.get_cookie("_yatri_session")["value"]
     }
     data = {
-        "utf8": driver.find_element(by=By.NAME, value='utf8').get_attribute('value'),
+        # "utf8": driver.find_element(by=By.NAME, value='utf8').get_attribute('value'),
         "authenticity_token": driver.find_element(by=By.NAME, value='authenticity_token').get_attribute('value'),
         "confirmed_limit_message": driver.find_element(by=By.NAME, value='confirmed_limit_message').get_attribute('value'),
         "use_consulate_appointment_capacity": driver.find_element(by=By.NAME, value='use_consulate_appointment_capacity').get_attribute('value'),
-        "appointments[consulate_appointment][facility_id]": embassy_config.facility_id,
+        "appointments[consulate_appointment][facility_id]": embassy_config.get_facility_id(),
         "appointments[consulate_appointment][date]": date,
-        "appointments[consulate_appointment][reschedule_time]": reschedule_time,
+        "appointments[consulate_appointment][time]": reschedule_time,
     }
     is_lock_present = os.path.isfile(LOCKFILE)
+    info_logger(LOG_FILE_NAME, f'Should reschedule: {should_reschedule}, Lock present: {is_lock_present}')
     if should_reschedule and not is_lock_present:
         r = requests.post(appointment_url, headers=headers, data=data)
+        info_logger(LOG_FILE_NAME, f'Reschedule response: {r.text}')
     if should_reschedule and not is_lock_present and r.text.find('Successfully Scheduled') != -1:
         title = "RESCHEDULE_SUCCESS"
         msg = f"{embassy_config.embassy_short_name}: Rescheduled Successfully! {date} {reschedule_time}"
@@ -166,7 +168,7 @@ def get_time(driver: webdriver.Chrome, date, time_url: str):
     content = driver.execute_script(script)
     data = json.loads(content)
     available_time = data.get("available_times")[-1]
-    print(f"Got reschedule_time successfully! {date} {available_time}")
+    info_logger(LOG_FILE_NAME, f"Got time successfully! {date} {available_time}")
     return available_time
 
 

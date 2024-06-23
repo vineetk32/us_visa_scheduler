@@ -25,7 +25,7 @@ class EmbassyConfig:
     should_reschedule: bool
     embassy_info: List
 
-    def __init__(self, embassy_short_name:str, appointment_period_start: str, appointment_period_end: str, should_reschedule: bool):
+    def __init__(self, embassy_short_name: str, appointment_period_start: str, appointment_period_end: str, should_reschedule: bool):
         self.embassy_short_name = embassy_short_name
         self.appointment_period_start = appointment_period_start
         self.appointment_period_end = appointment_period_end
@@ -49,6 +49,9 @@ class EmbassyConfig:
 
     def get_time_url(self, schedule_id) -> str:
         return f"https://ais.usvisa-info.com/{self.embassy_info[0]}/niv/schedule/{schedule_id}/appointment/times/{self.embassy_info[1]}.json?date=%s&appointments[expedite]=false"
+    
+    def get_facility_id(self) -> int:
+        return self.embassy_info[1]
 
 class VisaConfig:
 

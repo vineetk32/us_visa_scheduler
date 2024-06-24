@@ -3,7 +3,7 @@ import time
 import json
 import random
 import requests
-from typing import Dict
+from typing import Dict, List
 import asyncio
 import traceback
 import sys
@@ -28,7 +28,7 @@ MAX_LOGIN_RETRIES = 3
 
 SECS_PER_MINUTE = 60
 SECS_PER_HOUR = 60 * SECS_PER_MINUTE
-DATE_FORMAT = "%Y-%m-%d"
+DATE_FORMAT = '%Y-%m-%d'
 MAX_DATE_STR = '2038-12-12'
 MAX_DATE: datetime = datetime.strptime(MAX_DATE_STR, DATE_FORMAT)
 
@@ -182,14 +182,18 @@ def is_in_period(date: str, period_start: datetime, period_end: datetime) -> boo
     new_date = datetime.strptime(date, DATE_FORMAT)
     return period_end > new_date and new_date > period_start
 
-def get_available_date(period_start: str, period_end: str, dates):
+def get_available_date(blocked_days: List[str], period_start: str, period_end: str, dates):
     period_end_date = datetime.strptime(period_end, DATE_FORMAT)
     period_start_date = datetime.strptime(period_start, DATE_FORMAT)
     for d in dates:
         date = d.get('date')
+        if date in blocked_days:
+            info_logger(LOG_FILE_NAME, f"Skipping blocked date: {date}")
+            continue
         if is_in_period(date, period_start_date, period_end_date):
             return date
     print(f"\n\nNo available dates between ({period_start_date.date()}) and ({period_end_date.date()})!")
+    return None
 
 def info_logger(file_path, log):
     print(log)
@@ -209,7 +213,7 @@ def check_embassy(driver: webdriver.Chrome, schedule_id: str, embassy_config: Em
         for d in dates:
             msg = msg + "%s" % (d.get('date')) + ", "
         info_logger(LOG_FILE_NAME, msg)
-        date = get_available_date(embassy_config.appointment_period_start, embassy_config.appointment_period_end, dates)
+        date = get_available_date(embassy_config.blocked_days, embassy_config.appointment_period_start, embassy_config.appointment_period_end, dates)
         result.earliest_date = dates[0].get('date')
         if date:
             result.result_type, result.result_message = reschedule(driver, date, schedule_id, embassy_config, embassy_config.should_reschedule)
@@ -232,7 +236,7 @@ def get_embassy_summary(results: Dict[str, ExecutionResult]) -> str:
 
 def no_dates_all_embassies(results: Dict[str, ExecutionResult]) -> bool:
     for result in results.values():
-        if (result.possible_ban_count < MAX_BAN_COUNT):
+        if result.possible_ban_count < MAX_BAN_COUNT:
             return False
     return True
 
@@ -268,7 +272,7 @@ def main() -> int:
         result = check_embassy(driver, config.schedule_id, embassy)
         tries += 1
 
-        if embassy.embassy_short_name not in results.keys():
+        if embassy.embassy_short_name not in results:
             results[embassy.embassy_short_name] = result
 
         previous_result = results.get(embassy.embassy_short_name)
@@ -296,7 +300,7 @@ def main() -> int:
 
         info_logger(LOG_FILE_NAME, "-" * 60 + f"\nRequest count: {tries}, Log time: {datetime.today()}\n")
 
-        if (embassy_index == len(config.embassies) - 1):
+        if embassy_index == len(config.embassies) - 1:
             retry_wait_time = random.randint(config.retry_time_l_bound, config.retry_time_u_bound)
             msg = f"Retry Wait Time: {retry_wait_time} seconds"
             info_logger(LOG_FILE_NAME, msg)

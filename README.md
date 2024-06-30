@@ -3,19 +3,7 @@ The visa_rescheduler is a bot for US VISA (usvisa-info.com) appointment reschedu
 
 ## Prerequisites
 - Having a US VISA appointment scheduled already.
-- API token for Telegram. If you wish to use the simpler Pushover API instead, You can use this method to send notifications - 
-
-```python
-def send_pushover_notification(message):
-    payload = {
-        'token': PUSHOVER_API_TOKEN,
-        'user': PUSHOVER_USER_KEY,
-        'message': message
-    }
-    response = requests.post('https://api.pushover.net/1/messages.json', data=payload)
-    if response.status_code != 200:
-        print(f"Failed to send notification: {response.text}")
-```
+- [Optional] API token from Pushover and/or a Sendgrid (for notifications)(You also can use the esender.php file in this repo as an email pusher on your website)
 
 ## Attention
 - Right now, there are lots of unsupported embassies in our repository. A list of supported embassies is presented in the 'embassy.py' file.
@@ -23,25 +11,29 @@ def send_pushover_notification(message):
 ![Finding Facility id](https://github.com/Soroosh-N/us_visa_scheduler/blob/main/_img.png?raw=true)
 
 ## Initial Setup
-### Pre-requisites
-1. Linux
-2. Chromium
-
-Neither of these are strictly required, and should only need minor code changes to replace.
-
-### Setup
-- Install a virtual environment in the root directory - `python -m venv .venv`
-- Run the install script - `scripts/init.sh`
+- Install Google Chrome [for install goto: https://www.google.com/chrome/]
+- Install Python v3 [for install goto: https://www.python.org/downloads/]
+- Install the required python packages: Just run the bat file in the Microsoft Windows. Or run the below commands:
+```
+pip install requests==2.27.1
+pip install selenium==4.2.0
+pip install webdriver-manager==3.7.0
+pip install sendgrid==6.9.7
+```
 
 ## How to use
 - Initial setup!
 - Edit information [config.ini.example file]. Then remove the ".example" from file name.
-- Edit your push notification accounts information [config.ini.example file].
-- The default timing settings (TIME::WORK_LIMIT_TIME) make the script run for ~50 minutes.
-- The Selenium logic is not bulletprood, and the Visa website is badly designed. To avoid an exception for one run killing a forever running script, I would recommend the following timing config/scheduling setup - 
-    - Keep the WORK_LIMIT_TIME in the config to 0.8 hours
-    - Schedule the script to run every hour via cron. For e.g - `11 * * * * /home/vineet/code/us_visa_scheduler/visa_multiple.py`
-- As of Jun 2024, appointments in Canadian Embassies were only released everyday around ~3PM to ~3AM PT. Outside of these times, it was common to get no results, failure to log in or even a `503 under construction` error from the website.
+- [Optional] Edit your push notification accounts information [config.ini.example file].
+- [Optional] Edit your website push notification [config.ini.example and esender.php files].
+- Run visa.py file, using `python3 visa.py`
+
+## TODO
+- Make timing optimum. (There are lots of unanswered questions. How is the banning algorithm? How can we avoid it? etc.)
+- Adding a GUI (Based on PyQt)
+- Multi-account support (switching between accounts in Resting times)
+- Add a sound alert for different events.
+- Extend the embassies list.
 
 ## Acknowledgement
 Thanks to everyone who participated in this repo. Lots of people are using your excellent product without even appreciating you.

@@ -1,34 +1,62 @@
 [PERSONAL_INFO]
-; Account and current appointment info from https://ais.usvisa-info.com
-USERNAME = account@gmail.com
-PASSWORD = account_pass
+# Account and current appointment info from https://ais.usvisa-info.com
+USERNAME = username@email.domain
+PASSWORD = <password>
 ; Find SCHEDULE_ID in re-schedule page link:
 ; https://ais.usvisa-info.com/en-am/niv/schedule/{SCHEDULE_ID}/appointment
-SCHEDULE_ID = 99999999
-; Target Period:
-PRIOD_START = 2023-03-20
-PRIOD_END = 2023-06-01
-; Change "en-am-yer", based on your embassy Abbreviation in embassy.py list.
-YOUR_EMBASSY = en-am-yer
+SCHEDULE_ID = 58366000
+
+[EMBASSY_VANCOUVER]
+# Dates can either be relative like below, or absolute
+PERIOD_START = $DATE$ + 3
+PERIOD_END = 2024-10-01
+EMBASSY_CODE = en-ca-van
+# Comma separated list of absolute dates to ignore
+BLOCKED_DAYS = 2024-08-09, 2024-08-12, 2024-08-13, 2024-08-14, 2024-08-15, 2024-08-16, 2024-08-17, 2024-08-18, 2024-08-19, 2024-08-20, 2024-08-21, 2024-08-22
+# Notification-only mode or whether the appointment should actually be rescheduled. Default = False
+SHOULD_RESCHEDULE = True
+
+# Each embassy section should start with the prefix 'EMBASSY_'
+# Atleast one embassy section is required. They all all be evaluated in order.
+[EMBASSY_TORONTO]
+PERIOD_START = $DATE$ + 3
+PERIOD_END = 2024-10-01
+EMBASSY_CODE = en-ca-tor
+
+[EMBASSY_QUEBEC]
+PERIOD_START = $DATE$ + 3
+PERIOD_END = 2024-10-01
+EMBASSY_CODE = en-ca-que
+
+[EMBASSY_OTTAWA]
+PERIOD_START = $DATE$ + 3
+PERIOD_END = 2024-10-01
+EMBASSY_CODE = en-ca-ott
+
+[EMBASSY_MONTREAL]
+PERIOD_START = $DATE$ + 3
+PERIOD_END = 2024-10-01
+EMBASSY_CODE = en-ca-mon
+
+[EMBASSY_HALLIFAX]
+PERIOD_START = $DATE$ + 3
+PERIOD_END = 2024-10-01
+EMBASSY_CODE = en-ca-hal
+
+[EMBASSY_CALGARY]
+PERIOD_START = $DATE$ + 3
+PERIOD_END = 2024-10-01
+EMBASSY_CODE = en-ca-cal
 
 [NOTIFICATION]
-; Get push notifications via https://pushover.net/ (optional)
-PUSHOVER_TOKEN = 
-PUSHOVER_USER = 
-; Get email notifications via https://sendgrid.com/ (optional)
-SENDGRID_API_KEY = 
-; Get push notifications via PERSONAL WEBSITE http://yoursite.com (Optional)
-PERSONAL_SITE_USER = *********
-PERSONAL_SITE_PASS = *********
-PUSH_TARGET_EMAIL = notifyemail@gmail.com
-PERSONAL_PUSHER_URL = https://yoursite.com/api/esender.php
+# Token obtained from https://core.telegram.org/bots/tutorial#obtain-your-bot-token
+TELEGRAM_BOT_TOKEN = ***REMOVED***
+# The ID of the chat to which the notifications should be sent to. Can be a group or a 1:1 chat.
+TELEGRAM_CHAT_ID = ***REMOVED***
 
 [TIME]
 ; Time between retries/checks for available dates (seconds)
 RETRY_TIME_L_BOUND = 10
 RETRY_TIME_U_BOUND = 120
 ; Cooling down after WORK_LIMIT_TIME hours of work (Avoiding Ban)(hours)
-WORK_LIMIT_TIME = 1.5
-WORK_COOLDOWN_TIME = 2.25
-; Temporary Banned (empty list): wait COOLDOWN_TIME (hours)
-BAN_COOLDOWN_TIME = 5
+WORK_LIMIT_TIME = 0.8
